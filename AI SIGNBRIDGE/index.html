@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Sign Bridge - Cyberpunk MVP</title>
+    <link rel="manifest" href="manifest.json">
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <style>
+        :root {
+            --glow-color: #00f2fe;
+            --bg-color: #0a0f1d;
+            --card-bg: #111827;
+            --neon-pink: #ff007f;
+        }
+        body { 
+            font-family: 'Orbitron', 'Segoe UI', sans-serif; 
+            text-align: center; 
+            background: var(--bg-color); 
+            color: #ffffff;
+            margin: 0; 
+            padding: 20px;
+            overflow-x: hidden;
+        }
+        .wrapper { 
+            background: var(--card-bg); 
+            max-width: 600px; 
+            margin: 30px auto; 
+            padding: 40px 20px; 
+            border-radius: 24px; 
+            border: 1px solid rgba(0, 242, 254, 0.2);
+            box-shadow: 0 0 30px rgba(0, 242, 254, 0.15);
+        }
+        h1 { 
+            font-size: 2.5rem;
+            margin-bottom: 5px; 
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            background: linear-gradient(45deg, var(--glow-color), var(--neon-pink));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 10px rgba(0, 242, 254, 0.3);
+        }
+        p { color: #8a99ad; margin-top: 0; font-size: 0.95rem; letter-spacing: 1px; }
+        
+        /* Kamera TIDAK MIRROR di sini */
+        #webcam-container canvas { 
+            border-radius: 16px; 
+            transform: scaleX(1); /* 1 bermaksud normal, bukan mirror (-1) */
+            border: 2px solid var(--glow-color);
+            box-shadow: 0 0 20px rgba(0, 242, 254, 0.4);
+            max-width: 100%;
+            height: auto;
+        }
+        
+        #result-box { 
+            margin-top: 30px; 
+            padding: 20px; 
+            background: rgba(255, 255, 255, 0.03); 
+            border-radius: 16px; 
+            border: 1px dashed rgba(0, 242, 254, 0.5);
+            position: relative;
+        }
+        #result { 
+            font-size: 42px; 
+            font-weight: bold; 
+            color: #00ff88; 
+            min-height: 55px; 
+            text-shadow: 0 0 15px rgba(0, 255, 136, 0.6);
+            letter-spacing: 2px;
+        }
+        button { 
+            background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+            color: #000; 
+            border: none; 
+            padding: 16px 40px; 
+            font-size: 18px; 
+            border-radius: 50px; 
+            cursor: pointer; 
+            font-weight: bold; 
+            letter-spacing: 1px;
+            box-shadow: 0 0 15px rgba(0, 242, 254, 0.4);
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+        }
+        button:hover { 
+            transform: scale(1.05);
+            box-shadow: 0 0 25px rgba(0, 242, 254, 0.8);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="wrapper">
+        <h1>AI Sign Bridge 🤟</h1>
+        <p>Sistem Terjemahan Isyarat Masa Nyata // Versi 1.0</p>
+        
+        <button type="button" onclick="init()">Aktifkan Sistem AI</button>
+        
+        <div id="webcam-container" style="margin-top: 25px;"></div>
+        
+        <div id="result-box">
+            <div style="font-size: 11px; color: var(--glow-color); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px;">Data Output AI:</div>
+            <div id="result">SISTEM OFFLINE</div>
+        </div>
+    </div>
+
+<script type="text/javascript">
+    // Register Service Worker untuk fungsi Offline & Install
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js');
+    }
+
+    // ⚠️ MASUKKAN LINK YANG ANDA COPY DARI TEACHABLE MACHINE DI SINI:
+    const URL = "https://teachablemachine.withgoogle.com/models/pCbMAzQYj/"; 
+
+    let model, webcam, maxPredictions;
+    let lastSpokenWord = ""; 
+    let wordTimeout;
+
+    async function init() {
+        document.getElementById('result').innerText = "MEMUATKAN DATA...";
+        
+        try {
+            const modelURL = URL + "model.json";
+            const metadataURL = URL + "metadata.json";
+
+            model = await tmImage.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+
+            const flip = false; // DIUBAH KEPADA FALSE SUPAYA TIDAK MIRROR
+            webcam = new tmImage.Webcam(400, 300, flip); 
+            await webcam.setup(); 
+            await webcam.play();
+            window.requestAnimationFrame(loop);
+
+            document.getElementById("webcam-container").innerHTML = "";
+            document.getElementById("webcam-container").appendChild(webcam.canvas);
+            document.getElementById('result').innerText = "AI ONLINE";
+        } catch (error) {
+            document.getElementById('result').innerText = "RALAT SISTEM";
+        }
+    }
+
+    async function loop() {
+        webcam.update(); 
+        await predict();
+        window.requestAnimationFrame(loop);
+    }
+
+    async function predict() {
+        const prediction = await model.predict(webcam.canvas);
+        
+        let highestPred = { className: "", probability: 0 };
+        for (let i = 0; i < maxPredictions; i++) {
+            if (prediction[i].probability > highestPred.probability) {
+                highestPred = prediction[i];
+            }
+        }
+
+        if (highestPred.probability > 0.88) {
+            const currentWord = highestPred.className;
+            document.getElementById('result').innerText = currentWord.toUpperCase();
+            
+            if (currentWord !== lastSpokenWord) {
+                speak(currentWord);
+                lastSpokenWord = currentWord;
+                clearTimeout(wordTimeout);
+                wordTimeout = setTimeout(() => { lastSpokenWord = ""; }, 3000);
+            }
+        } else {
+            document.getElementById('result').innerText = "...";
+        }
+    }
+
+    function speak(text) {
+        if ('speechSynthesis' in window) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'id-ID'; 
+            window.speechSynthesis.speak(utterance);
+        }
+    }
+</script>
+</body>
+</html>
