@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Sign Language Interpreter</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-color: #0a0d14;
+            --card-bg: rgba(16, 22, 35, 0.65);
+            --accent-glow: #00f2fe;
+            --accent-blue: #4facfe;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --error-color: #ff4a4a;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(79, 172, 254, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(0, 242, 254, 0.05) 0%, transparent 40%);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .app-container {
+            width: 100%;
+            max-width: 500px;
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 24px;
+            padding: 32px;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        header h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 26px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            margin: 0 0 6px 0;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-glow));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        header p {
+            color: var(--text-muted);
+            font-size: 13px;
+            margin: 0 0 24px 0;
+        }
+
+        .view-wrapper {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #webcam-container {
+            width: 100%;
+            height: 100%;
+        }
+
+        #webcam-container canvas {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover;
+            transform: scaleX(-1); /* Efek cermin otomatis agar natural */
+        }
+
+        .status-message {
+            color: var(--text-muted);
+            font-size: 14px;
+            position: absolute;
+            padding: 0 20px;
+            line-height: 1.5;
+        }
+
+        .error-text {
+            color: var(--error-color) !important;
+        }
+
+        .btn-primary {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-glow));
+            color: #050508;
+            border: none;
+            padding: 14px 32px;
+            font-size: 15px;
+            font-weight: 600;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 242, 254, 0.2);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 242, 254, 0.4);
+        }
+
+        .output-panel {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 14px;
+            padding: 16px;
+            margin-top: 20px;
+        }
+
+        .output-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        #result-display {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 26px;
+            font-weight: 700;
+            color: var(--text-muted);
+        }
+
+        .status-active {
+            color: var(--accent-glow) !important;
+            text-shadow: 0 0 12px rgba(0, 242, 254, 0.4);
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <header>
+        <h1>SIGN INTELLIGENCE</h1>
+        <p>Real-time AI Sign Language Translation</p>
+    </header>
+
+    <div class="view-wrapper">
+        <div class="status-message" id="status-text">System Standby.<br>Ready for initialization.</div>
+        <div id="webcam-container"></div>
+    </div>
+
+    <div id="action-area">
+        <button class="btn-primary" type="button" onclick="init()">Initialize System</button>
+    </div>
+
+    <div class="output-panel">
+        <div class="output-label">Translation Output</div>
+        <div id="result-display">OFFLINE</div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
+<script type="text/javascript">
+    // ⚠️ MASUKKAN LINK TEACHABLE MACHINE ANDA DI BAWAH INI ⚠️
+    let URL = "https://teachablemachine.withgoogle.com/models/_VYYllhM4/";
+
+    let model, webcam, resultDisplay, statusText, maxPredictions;
+
+    async function init() {
+        statusText = document.getElementById("status-text");
+        resultDisplay = document.getElementById("result-display");
+
+        statusText.classList.remove("error-text");
+        statusText.innerHTML = "Connecting to AI Core...";
+        resultDisplay.innerText = "LOADING...";
+
+        // Proteksi 1: Cek apakah link default belum diubah
+        if (URL.includes("PASTE_LINK_MODEL_ANDA_DI_SINI")) {
+            showError("URL Error: Please paste your Teachable Machine model link inside the code.");
+            resultDisplay.innerText = "SETUP REQ";
+            return;
+        }
+
+        // Proteksi 2: Otomatis tambahkan tanda miring '/' di akhir URL jika hilang
+        if (!URL.endsWith("/")) {
+            URL += "/";
+        }
+
+        try {
+            const modelURL = URL + "model.json";
+            const metadataURL = URL + "metadata.json";
+
+            // Memuat model AI
+            model = await tmImage.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+            
+            statusText.innerHTML = "Model Loaded successfully.<br>Requesting camera access...";
+
+            // Setup Webcam
+            const size = 400;
+            const flip = false; // di-false karena CSS sudah membalikkan canvas secara otomatis agar lebih rapi
+            webcam = new tmImage.Webcam(size, size, flip); 
+            
+            await webcam.setup({ facingMode: "user" }); // Memprioritaskan kamera depan (untuk HP)
+            await webcam.play();
+            
+            // Pasang canvas webcam ke UI
+            statusText.style.display = "none";
+            document.getElementById("webcam-container").appendChild(webcam.canvas);
+            document.getElementById("action-area").style.display = "none";
+            
+            resultDisplay.innerText = "READY";
+            resultDisplay.classList.add("status-active");
+            
+            window.requestAnimationFrame(loop);
+        } catch (error) {
+            console.error(error);
+            handleError(error);
+        }
+    }
+
+    function handleError(err) {
+        const errStr = err.toString();
+        if (errStr.includes("Permission denied") || errStr.includes("NotAllowedError")) {
+            showError("Camera Access Blocked!<br>Please click the lock icon in your browser address bar and set Camera to 'Allow'.");
+            resultDisplay.innerText = "CAM BLOCKED";
+        } else if (errStr.includes("Failed to fetch") || errStr.includes("NetworkError")) {
+            showError("Network Error!<br>Failed to fetch model. Check your internet connection or verify your model link.");
+            resultDisplay.innerText = "NET ERROR";
+        } else {
+            showError("Initialization Failed:<br>" + err.message);
+            resultDisplay.innerText = "ERROR";
+        }
+    }
+
+    function showError(message) {
+        statusText.style.display = "block";
+        statusText.classList.add("error-text");
+        statusText.innerHTML = message;
+    }
+
+    async function loop() {
+        webcam.update(); 
+        await predict();
+        window.requestAnimationFrame(loop);
+    }
+
+    async function predict() {
+        const prediction = await model.predict(webcam.canvas);
+        
+        let highestProb = 0;
+        let bestMatch = "";
+
+        for (let i = 0; i < maxPredictions; i++) {
+            if (prediction[i].probability > highestProb) {
+                highestProb = prediction[i].probability;
+                bestMatch = prediction[i].className;
+            }
+        }
+
+        // Tampilkan hasil deteksi jika akurasi di atas 75%
+        if (highestProb > 0.75) {
+            resultDisplay.innerText = bestMatch.toUpperCase();
+            resultDisplay.classList.add("status-active");
+        } else {
+            resultDisplay.innerText = "SCANNING...";
+            resultDisplay.classList.remove("status-active");
+        }
+    }
+</script>
+
+</body>
+</html>
